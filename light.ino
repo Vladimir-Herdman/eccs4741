@@ -63,6 +63,10 @@ void handle_command(const char* command_str) {
     if (!led_state) return;
     digitalWrite(ledPin, LOW);
     led_state = false;
+  } else if (strncmp(command_str+1, "time", 4) == 0) {
+    const unsigned long base_time_ms = atol(command_str+6);
+    const unsigned long local_time_ms = millis();
+    serial_printf("base time:%lu\nlocal time:%lu\ndifference:%lu\n\n", base_time_ms, local_time_ms, (unsigned long)(base_time_ms-local_time_ms));
   }
 }
 

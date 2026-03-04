@@ -13,6 +13,7 @@ struct XbeeNode {
 char msg[256] = {0}; //256 bytes arbitrary size, just one I choose when making it
 XbeeNode available_nodes[8];
 size_t available_nodes_idx = 0;
+const int ledPin = 13;
 
 //Example below changed from variadic cpp reference site: https://en.cppreference.com/w/cpp/utility/variadic.html
 //Currently max 64 str len sending (arbitrary, just what I choose when I made it)
@@ -137,9 +138,9 @@ void log_node_msg(XbeeNode* xbeenode) {
   //else Serial.print("<turn off light>\n");
 }
 
-void get_all_nodes_state() {
+void get_all_nodes_state(const int delay_ms) {
   Serial.print("<*state>\n");
-  delay(200);
+  delay(delay_ms);
   get_all_xbee_message();
   save_responding_nodes();
 }
@@ -182,14 +183,32 @@ void respond_to_node(XbeeNode* xbeenode) {
   xbeenode->recieved_new_msg = false;
 }
 
+void turn_on_led() {
+  static bool lightstate = false;
+  digitalWrite(ledPin, (lightstate ? LOW : HIGH));
+  lightstate = !lightstate;
+}
+
+void broadcast_cur_time() {
+  const unsigned long cur_time_ms = millis();
+  serial_printf("<*time:%lu>\n", cur_time_ms);
+  delay(5000);
+  while (true) {
+    turn_on_led();
+    delay(1000);
+  }
+}
+
 void setup() {
   Serial.begin(9600);
+  pinMode(ledPin, OUTPUT);
   //Xbee.begin(9600);
 }
 
 void loop() {
+  /* Orignal temp/light dual node code */ /*
   //Just call *state to all xbees, then get all data from reading msg
-  get_all_nodes_state();
+  get_all_nodes_state(200);
 
   //Go through each xbee in node list, and respond to info recieved
   for (size_t i=0; i<available_nodes_idx; i++) {
@@ -197,6 +216,15 @@ void loop() {
     if (!xbeenode->recieved_new_msg) continue;
     respond_to_node(xbeenode);
     xbeenode->recieved_new_msg = false;
+  }
+
+  delay(1000);
+  */
+  /* Time sync code */
+  if (available_nodes[0].flag == '\0') {
+    get_all_nodes_state(5000);
+    if (available_nodes[0].flag != '\0') broadcast_cur_time();
+    return;
   }
 
   delay(1000);
