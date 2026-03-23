@@ -133,7 +133,7 @@ void get_all_nodes_state(const int delay_ms) {
 }
 
 void respond_to_node(XbeeNode* xbeenode) {
-  serial_printf("node flag(%c) and val(%d)\n", xbeenode->flag, (int)xbeenode->val);
+  //serial_printf("node flag(%c) and val(%d)\n", xbeenode->flag, (int)xbeenode->val);
   switch (xbeenode->flag) {
     case 'T': {
       const int temp = (int)xbeenode->val;
@@ -173,15 +173,25 @@ void setup() {
   Serial.begin(9600);
 }
 
-void loop() { /*
+void loop() {
+  //If no nodes in current network list, call <*state> until a response
   if (available_nodes[0].flag == '\0') {
     get_all_nodes_state(2000);
     return;
-  } */
+  }
 
+  //After network list exists, every 3 seconds check for any updates, and respond accordingly
   cur_ms = millis(); //always place 'last_ms = cur_ms' in last if statement
   if (ms_passed(3000)) {
-    serial_printf("3 seconds passed\n");
+
+    for (size_t i=0; i<available_nodes_idx; i++) {
+      XbeeNode* xbeenode = &available_nodes[i];
+      if (!xbeenode->recieved_new_msg) continue;
+      respond_to_node(xbeenode);
+      xbeenode->recieved_new_msg = false;
+    }
+
+    //serial_printf("3 seconds passed\n");
     last_ms = cur_ms;
   }
 }
