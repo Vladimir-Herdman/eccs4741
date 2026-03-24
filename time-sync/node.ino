@@ -27,7 +27,6 @@ void serial_printf(const char* fmt, ...) {
 
 void respond_to_msg();
 void get_all_xbee_message() {
-  
   char incoming_byte = '\0';
   static size_t index = 0;
   while (Serial.available() > 0) {

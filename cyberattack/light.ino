@@ -63,10 +63,11 @@ void turn_on_led() {
   //multiple back and forth messaging between nodes for error correction/detection in messaging.
 void handle_command(const char* command_str) {
   if (!(command_str[0] == 'L' || command_str[0] == '*')) return;
-  if (strcmp(command_str+1, "state") == 0) { 
+  if (strncmp(command_str+1, "state", 5) == 0) { 
     const char* led_state_str = (led_state ? "on" : "off");
     const int light_level = getLightLevel();
-    serial_printf("<L%s:%d>\n", led_state_str, light_level);
+    const char* hashkey = strchr(command_str, ':')+1;
+    serial_printf("<L%s:%d;%s>\n", led_state_str, light_level, hashkey);
     
   } else if (strcmp(command_str+1, "turn on led") == 0) {
     if (led_state) return;

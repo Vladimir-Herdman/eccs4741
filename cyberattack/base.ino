@@ -3,6 +3,9 @@
 
 #define ms_passed(ms) cur_ms - last_ms >= (ms)
 
+const char* passsword_shhhhhhhhhh = "time-hash";
+//iluvjakehammond67420blazeitpasswordjerrymanderwho'is'jerryi<3beefheyollie:3
+
 struct XbeeNode {
   char flag = '\0';
   char lastmsg[20] = {0};
@@ -76,7 +79,7 @@ void save_responding_nodes() {
     };
 
     *bracket_end = '\0';
-    if (node_list_contains(bracket_start[1])) {
+    if (node_list_contains(bracket_start[1]) && strcmp(strchr(strchr, ';'), passsword_shhhhhhhhhh)) {
       update_node(&bracket_start[1]);
     } else {
       append_node(&bracket_start[1]);
@@ -87,7 +90,8 @@ void save_responding_nodes() {
 }
 
 void get_available_nodes() {
-  Serial.print("<*state>\n");
+  //Serial.print("<*state>\n");
+  serial_printf("<*state:%s>\n", passsword_shhhhhhhhhh)
   delay(200);
   get_all_xbee_message();
   save_responding_nodes();

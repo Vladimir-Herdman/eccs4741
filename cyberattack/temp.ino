@@ -71,7 +71,9 @@ void handle_command(const char* command_str) {
   if (strcmp(command_str+1, "state") == 0) { //Return current state
     const char* fan_state_str = (fan_state ? "on" : "off");
     float temp = getTemp();
-    serial_printf("<T%s:", fan_state_str); Serial.print(temp); Serial.print(">\n");
+    const char* hashkey = strchr(command_str, ':')+1;
+    serial_printf("<T%s:%f;%s>\n", fan_state_str, temp, hashkey);
+    //serial_printf("<T%s:", fan_state_str); Serial.print(temp); SerialSerial.print(">\n");
   } else if (strcmp(command_str+1, "turn on fan") == 0) {
     analogWrite(A1, 255);
     fan_state = true;
