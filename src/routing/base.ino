@@ -24,6 +24,7 @@ struct {
   char dflag;
   char last_received_msg[64];
   bool new_msg = false;
+  int ncount = 0;
 } self;
 
 char msg[256] = {0};
@@ -73,15 +74,18 @@ bool append_initial_node(const char* node_str) {
   if (node_str[0] == '*') return false;
   if (available_nodes_idx == 8) return false;
   for (size_t i=0; i<available_nodes_idx; i++) { //if already in list, return and do nothing
-    const XbeeNode* xbn = available_nodes[i];
-    if (strncmp(xbn->sh, nodestr+1, 6) == 0 && strncmp(xbn->sl, nodestr+1+6, 8) == 0) return false;
+    const XbeeNode* xbn = &available_nodes[i];
+    if (strncmp(xbn->sh, node_str+1, 6) == 0 && strncmp(xbn->sl, node_str+1+6, 8) == 0) return false;
   }
   XbeeNode node;
   static char iflag = 'a';
   node.flag = iflag++;
   node.recieved_new_msg = true;
-  strncpy(node.sh, nodestr+1, 6);
-  strncpy(node.sl, nodestr+1+6, 8);
+  //serial_printf("  node_str:%s\n", node_str);
+  strncpy(node.sh, node_str+1, 6);
+  strcpy(node.sl, node_str+1+6);
+  //serial_printf("  node_str sl:%s\n", node_str+1+6);
+  //serial_printf("  %s\n", node.sl);
   available_nodes[available_nodes_idx] = node;
   ++available_nodes_idx;
   return true;
@@ -105,7 +109,7 @@ bool append_node(const char* node_str) {
 
 bool node_list_contains_str(const char* sh) {
   for (size_t i=0; i<available_nodes_idx; i++) {
-    const XbeeNode* xbn = available_nodes[i];
+    const XbeeNode* xbn = &available_nodes[i];
     if (strncmp(xbn->sh, sh, 6) == 0 && strncmp(xbn->sl, sh+6, 8) == 0) return true;
   }
   return false;
@@ -156,8 +160,10 @@ void save_state_msg() {
     *bracket_end = '\0';
     if (bracket_start[1] == '0') { //for base station
       self.new_msg = true;
+      strlcpy(self.last_received_msg, bracket_start+2, sizeof(self.last_received_msg));
     }
   }
+}
 
 void save_responding_nodes() {
   char* bracket_start = msg;
@@ -194,9 +200,9 @@ void get_all_xbee_message() {
   msg[index] = '\0';
 }
 
-setDHDL(const char* dh, const char* dl) {
+/*setDHDL(const char* dh, const char* dl) {
   for (int i=0; i<available_nodes_idx; i++) {
-    XbeeNode* xbn = available_nodes[i];
+    XbeeNode* xbn = &available_nodes[i];
     if (!(strncmp(xbn->sh, dh, 6) == 0 && strncmp(xbn->sl, dl, 8) == 0)) continue;
     self.dflag = xbn->flag;
   }
@@ -214,22 +220,25 @@ setDHDL(const char* dh, const char* dl) {
 
   Serial.println("ATCN");
   delay(100);
-}
+}*/
 
 
 void send_initial_node_flags() {
+  if (available_nodes_idx == 0) return;
   char imsg[128] = {0};
   strlcat(imsg, "<*set", sizeof(imsg));
   for (size_t i=0; i<available_nodes_idx; i++) {
     XbeeNode* xbn = &available_nodes[i];
     //if (!xbn->recieved_new_msg) continue;
     strncat(imsg, xbn->sh, 6);
-    strncat(imsg, xbn->sl, 8);
-    strlcat(imsg, xbn->flag, sizeof(imsg));
+    strcat(imsg, xbn->sl);
+    char flagflag[2] = {0}; flagflag[0] = xbn->flag;
+    strlcat(imsg, flagflag, sizeof(imsg));
     strlcat(imsg, ";", sizeof(imsg));
     //xbn->recieved_new_msg = false;
   }
   strlcat(imsg, ">", sizeof(imsg));
+  self.ncount = available_nodes_idx;
   Serial.println(imsg);
   //setDHDL()
 }
@@ -247,7 +256,7 @@ void get_A_node_state(const int delay_ms) {
   delay(delay_ms);
   get_all_xbee_message();
   //save_responding_nodes();
-  save_state_msg()
+  save_state_msg();
 }
 
 void get_all_nodes_state(const int delay_ms) {
@@ -259,20 +268,19 @@ void get_all_nodes_state(const int delay_ms) {
 
 void respond_to_nodes() {
   char tosend[64] = {0};
-  strlcat(tosend, "<aturn", sizeof(tosend));
-  char* curmsg = self.last_received_msg;
-  for (int i=0; i<available_nodes_idx; i++) {
-    char flag = curmsg[1];
-    char* semicol = strchr(curmsg, ';');
-    if (!semicol) semicol = strchr(curmsg, '>');
-    *semicol = '\0';
-    int temp = atof(curmsg+2);
-    if (temp >= 70) strlcat(tosend, "on", sizeof(tosend));
-    else strlcat(tosend, "off", sizeof(tosend));
-    curmsg = semicol;
+  char* curmsg = self.last_received_msg; //past '<%c', so just data and no '>' at end: 'a123;b321;c441;'
+  int lightlevel = atof(curmsg+1);
+  snprintf(tosend, sizeof(tosend), "<aturna%s;", (lightlevel > 600 ? "off" : "on"));
+  for (int i=1; i<self.ncount; i++) {
+    char nodeflag = 'a'+i;
+    curmsg = strchr(curmsg, nodeflag);
+    lightlevel = atof(curmsg+1);
+    strlcat(tosend, nodeflag, sizeof(tosend));
+    strlcat(tosend, (lightlevel > 600 ? "off" : "on"), sizeof(tosend));
+    strlcat(tosend, ";", sizeof(tosend));
   }
   strlcat(tosend, ">", sizeof(tosend));
-  Serial.println(tosend)
+  Serial.println(tosend); //<aturnaon;boff;con;>
 }
 
 void respond_to_node(XbeeNode* xbeenode) {
@@ -308,10 +316,10 @@ void respond_to_node(XbeeNode* xbeenode) {
   xbeenode->recieved_new_msg = false;
 }
 
-void sendToNode(const char*  dh, const char* dl, const char* message) {
+/*void sendToNode(const char*  dh, const char* dl, const char* message) {
   setDHDL(dh, dl);
   Serial.println(message);
-}
+}*/
 
 void getSHSL() { 
   delay(1000);
@@ -350,7 +358,7 @@ void loop() {
 
   //After network list exists, every 3 seconds check for any updates, and respond accordingly
   cur_ms = millis(); //always place 'last_ms = cur_ms' in last if statement
-  if (ms_passed(3000)) {
+  if (ms_passed(5000)) {
     get_A_node_state(5000);
 
     if (self.new_msg) {

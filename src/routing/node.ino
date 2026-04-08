@@ -1,8 +1,16 @@
 /* Node */
 #include <SoftwareSerial.h>
 
-#define last_node_in_chain() (self.flag-'a'+1) == self.ncount
+#define is_last_node_in_chain() (self.flag-'a'+1) == self.ncount
+#define last_node_in_chain() ('a' + (self.ncount-1))
 #define next_node_in_chain() (self.flag+1)
+
+#define read_serial(dst) \
+count = 0; \
+while(Serial.available()) { \
+  (dst)[count] = (char)Serial.read(); \
+  ++count; \
+}
 
 struct {
   char sh[16];
@@ -10,6 +18,7 @@ struct {
   char flag = '!';
   int ncount = 0;
 } self;
+int count = 0;
 
 char msg[256] = {0};
 bool led_state = false; //False for off, true for on
@@ -60,23 +69,31 @@ void turn_on_led() {
 void handle_command(const char* command_str) {
   if (!(command_str[0] == '*' || command_str[0] == self.flag)) return;
   if (strncmp(command_str+1, "state", 5) == 0) { 
-    //TODO - this section, recurse till last node in chain
     //Determine if last node, if not, then send state down to last.
     //Once you receive the propogate, send it back in the chain.
     //  If you're cluster head ('a'), then send back to base station ('0' flag)
-    if (last_node_in_chain()) handle_command(" propogate");
+    if (is_last_node_in_chain()) handle_command(".propogate"); //send to self, recurse
     else serial_printf("<%cstate>\n", next_node_in_chain());
-
-    // const char* led_state_str = (led_state ? "on" : "off");
-    // const int light_level = getLightLevel();
-    // serial_printf("<%c:%d>\n", self.flag, light_level);
   }
   else if (strncmp(command_str+1, "propogate", 9) == 0) { //send back up to previous node, then base if cluster head
+    char propogation_buffer[64] = {0};
+    char* carried_data = command_str+1+9;
+    int lightlevel = getLightLevel();
+    char node_up_chain = self.flag == 'a' ? '0' : self.flag-1;
 
+    snprintf(propogation_buffer, sizeof(propogation_buffer), "<%cpropogate%c%d;%s>",
+      node_up_chain, self.flag, lightlevel, carried_data);
+
+    // str:<0c123;a123;b1234;>
+    Serial.print(propogation_buffer);
   }
+  //Will also recursively send until last node, since base should be determining
+  //actions for each node, based off all their temp values.
+  //  A better way would include just using info changes for individual nodes,
+  //  but I'm not that kinda beast man.
   else if (strncmp(command_str+1, "turn", 4) == 0) { //send back up to previous node, then base if cluster head
-    char* turnlight = command_str+1+4;
-    if (strncmp(turnlight, "on", 2) == 0) {
+    const bool turnlighton = strncmp(command_str+1+4+1, "on", 2) == 0; //'on' or 'off'
+    if (turnlighton) {
       if (led_state) return;
       digitalWrite(ledPin, HIGH);
       led_state = true;
@@ -85,23 +102,32 @@ void handle_command(const char* command_str) {
       digitalWrite(ledPin, LOW);
       led_state = false;
     }
+
+    //if last node, don't need to do this, otherwise, send down again
+    if (is_last_node_in_chain()) return;
+    char* restofmsg = strchr(command_str+1+4, next_node_in_chain());
+    Serial.print("<"); Serial.print(next_node_in_chain()); Serial.print("turn"); Serial.print(restofmsg); Serial.print(">\n");
   }
   //set self.flag and self.ncount (nodes in network count) based off base
   //setting msg (the FOLLOWING 'else if')
   else if (strncmp(command_str+1, "set", 3) == 0) {
+    Serial.print("  in set"); //COMMENT
     char fullsid[16] = {0};
     strlcat(fullsid, self.sh, sizeof(fullsid));
     strlcat(fullsid, self.sl, sizeof(fullsid));
     char* sid = strstr(command_str, fullsid);
     if (!sid) {Serial.print("  ERROR: sid not found in command_str\n"); return;}
-    self.flag = sid[6+8];
+    self.flag = sid[6+8+2];
+    //serial_printf("  sid:%s\n", sid);
+    //Serial.print("  self.flag="); Serial.print(self.flag);
     //self.flag = *(strstr(command_str+4, self.sl)+8);
 
     char* semicol = strchr(command_str, ';');
     int simicol_count = 0;
     while (semicol != NULL) {
+      Serial.println("  here");
       ++simicol_count;
-      curmsg = strchr(command_str, ';');
+      semicol = strchr(semicol+1, ';');
     }
     self.ncount = simicol_count; //Use ncount to determine if we need to propogate a msg or send back to base
 
@@ -163,4 +189,3 @@ void setup() {
 void loop() {
   get_all_xbee_message();
 }
-
