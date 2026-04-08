@@ -1,17 +1,15 @@
-/* Temp */
+/* Light */
 #include <SoftwareSerial.h>
 
 #define ms_passed(ms) cur_ms - last_ms >= (ms)
 
 // XBee sending setup
-//SoftwareSerial Xbee(0, 1);
+//SoftwareASerial Xbee(0, 1);
 char msg[256] = {0};
-bool fan_state = false; //False for off, true for on
+bool led_state = false; //False for off, true for on
 
-const int ldrPin = A0;
-const float Vref = 5.0;
-const float slope = 25.0;
-const float offset = 5.0;
+const int ldrPin = A0;   // LDR connected to analog pin A0
+const int ledPin = 13;    // LED connected to digital pin A1
 
 unsigned long cur_ms;
 unsigned long last_ms;
@@ -19,11 +17,8 @@ unsigned long last_ms;
 unsigned long msg_delay[2] = {0};
 int msg_delay_idx = 0;
 
-float getTemp() {
-  int rawValue = analogRead(ldrPin);
-  float voltage = ((float)rawValue / 1023.0f) * Vref;
-  float temperature = (voltage * slope) + offset;
-  return temperature;
+int getLightLevel() {
+  return analogRead(ldrPin);  // Returns 0–1023
 }
 
 void serial_printf(const char* fmt, ...) {
@@ -58,28 +53,34 @@ void get_all_xbee_message() {
 
 void turn_on_led() {
   static bool lightstate = false;
-  digitalWrite(ldrPin, (lightstate ? LOW : HIGH));
+  digitalWrite(ledPin, (lightstate ? LOW : HIGH));
   lightstate = !lightstate;
 }
 
 //TODO: currently, we don't have 'confirmation' with base that we actually got the msg, so
-//that could be worked on, having the 'handshake agreement' between messenger and node.
-//Maybe, look into that one library seen that handles the API messaging and can handle
-//multiple back and forth messaging between nodes for error correction/detection in messaging.
+  //that could be worked on, having the 'handshake agreement' between messenger and node.
+  //Maybe, look into that one library seen that handles the API messaging and can handle
+  //multiple back and forth messaging between nodes for error correction/detection in messaging.
 void handle_command(const char* command_str) {
-  if (!(command_str[0] == 'T' || command_str[0] == '*')) return; //<Cstate> <Cturn on light>
-  if (strncmp(command_str+1, "state", 5) == 0) { //Return current state
-    const char* fan_state_str = (fan_state ? "on" : "off");
-    const char* hashkey=strchr(command_str, ':')+1;
-    float temp = getTemp();
-    serial_printf("<T%s:", fan_state_str);Serial.print(temp);serial_printf(";%s>\n", hashkey);
-    //serial_printf("<T%s:", fan_state_str); Serial.print(temp); SerialSerial.print(">\n");
-  } else if (strcmp(command_str+1, "turn on fan") == 0) {
-    analogWrite(A1, 255);
-    fan_state = true;
-  } else if (strcmp(command_str+1, "turn off fan") == 0) {
-    analogWrite(A1, 0);
-    fan_state = false;
+  if (!(command_str[0] == 'L' || command_str[0] == '*')) return;
+  if (strncmp(command_str+1, "state", 5) == 0) { 
+    const char* led_state_str = (led_state ? "on" : "off");
+    const int light_level = getLightLevel();
+    const char* hashkey = strchr(command_str, ':')+1;
+    serial_printf("<L%s:%d;%s>\n", led_state_str, light_level, hashkey);
+    
+  } else if (strcmp(command_str+1, "turn on led") == 0) {
+    if (led_state) return;
+    digitalWrite(ledPin, HIGH);
+    led_state = true;
+  } else if (strcmp(command_str+1, "turn off led") == 0) {
+    if (!led_state) return;
+    digitalWrite(ledPin, LOW);
+    led_state = false;
+  } else if (strncmp(command_str+1, "time", 4) == 0) {
+    
+    msg_delay[msg_delay_idx] = millis();
+    ++msg_delay_idx;
   }
 }
 
@@ -103,7 +104,7 @@ void respond_to_msg() {
 
 void setup() {
   Serial.begin(9600);
-  pinMode(A1, OUTPUT);
+  pinMode(ledPin, OUTPUT);
 }
 
 void loop() {

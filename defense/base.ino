@@ -79,7 +79,7 @@ void save_responding_nodes() {
     };
 
     *bracket_end = '\0';
-    if (node_list_contains(bracket_start[1])/* && strcmp(strchr(bracket_start, ';')+1, passsword_shhhhhhhhhh) == 0*/) {
+    if (node_list_contains(bracket_start[1]) && strcmp(strchr(strchr, ';'), passsword_shhhhhhhhhh)) {
       update_node(&bracket_start[1]);
     } else {
       append_node(&bracket_start[1]);
@@ -91,7 +91,7 @@ void save_responding_nodes() {
 
 void get_available_nodes() {
   //Serial.print("<*state>\n");
-  serial_printf("<*state:%s>\n", passsword_shhhhhhhhhh);
+  serial_printf("<*state:%s>\n", passsword_shhhhhhhhhh)
   delay(200);
   get_all_xbee_message();
   save_responding_nodes();
@@ -108,12 +108,16 @@ void get_all_xbee_message() {
     if (index == sizeof(msg)-1) break;
   }
   msg[index] = '\0';
-  //char msgcpy[256];
-  //for (int i=0; i<256; i++) {
-  //  if (msg[i] = '<' || msg[i] == '>') msgcpy[i] = '^';
-  //  else msgcpy[i] = msg[i];
-  //}
-  //Serial.print(msgcpy);
+  char msgcpy[256] = {0};
+  for (int i=0; i<256; i++) {
+    msgcpy[i] = msg[i];
+    if (msg[i] == '<' || msg[i] == '>' || msg[i] == '\n') {
+      msgcpy[i] = '^';
+    }
+  }
+  for (int i=0; i<256; i++) {
+    Serial.print(msgcpy[i]);
+  }
 }
 
 void request_node_msg(XbeeNode* xbeenode) {
@@ -136,7 +140,7 @@ void log_node_msg(XbeeNode* xbeenode) {
 }
 
 void get_all_nodes_state(const int delay_ms) {
-  serial_printf("<*state:%s>\n", passsword_shhhhhhhhhh);
+  Serial.print("<*state>\n");
   delay(delay_ms);
   get_all_xbee_message();
   save_responding_nodes();
@@ -193,7 +197,6 @@ void loop() {
   //After network list exists, every 3 seconds check for any updates, and respond accordingly
   cur_ms = millis(); //always place 'last_ms = cur_ms' in last if statement
   if (ms_passed(3000)) {
-    get_all_nodes_state(2000);
 
     for (size_t i=0; i<available_nodes_idx; i++) {
       XbeeNode* xbeenode = &available_nodes[i];
