@@ -31,6 +31,7 @@ char msg[256] = {0};
 int count; //Global count value, because we love global access to variables anywhere anytime.
 XbeeNode available_nodes[8];
 size_t available_nodes_idx = 0;
+bool first_initial_done = false;
 
 unsigned long cur_ms;
 unsigned long last_ms;
@@ -111,9 +112,36 @@ void save_initial_responding_nodes() {
 void respond_to_from_node() {
   if (strncmp(self.last_received_msg, "propogate", 9) == 0) respond_to_nodes();
   else { //only other time msg, at start getting all nodes set up
-    save_initial_responding_nodes();
     send_initial_node_flags();
   }
+}
+
+void save_and_respond() {
+  char* bracket_start = msg;
+  while (bracket_start[1] == '<') bracket_start += 1;
+  /*Serial.print("  in save state, here's msg cur:");
+  for (int i=0; i<strlen(msg); i++) {
+  if (msg[i] == '\n' || msg[i] == '<' || msg[i] == '>' || msg[i] == '\0') {
+    Serial.print("^");
+  } else Serial.print(msg[i]);
+  }*/
+  while ((bracket_start = strchr(bracket_start, '<')) != NULL) {
+    char* bracket_end = strchr(bracket_start, '>');
+    if (!bracket_end) break;
+    if (bracket_end == bracket_start+1) {
+      *bracket_end = '\0';
+      bracket_start = bracket_end + 1;
+      continue;
+    };
+
+    *bracket_end = '\0';
+    //serial_printf("  in save_state, bracket_start:%s\n", bracket_start);
+    if (bracket_start[1] == '0') { //for base station
+      self.new_msg = true;
+      strlcpy(self.last_received_msg, bracket_start+2, sizeof(self.last_received_msg));
+      respond_to_from_node();
+    }
+  } 
 }
 
 void save_state_msg() {
@@ -132,15 +160,17 @@ void save_state_msg() {
       bracket_start = bracket_end + 1;
       continue;
     };
-
     *bracket_end = '\0';
     //serial_printf("  in save_state, bracket_start:%s\n", bracket_start);
     if (bracket_start[1] == '0') { //for base station
       self.new_msg = true;
       strlcpy(self.last_received_msg, bracket_start+2, sizeof(self.last_received_msg));
-      respond_to_from_node();
+      save_initial_responding_nodes();
     }
+    bracket_start = bracket_end + 1;
   }
+  first_initial_done = true;
+  respond_to_from_node();
 }
 
 void get_all_xbee_message(/*int timeout_ms*/) {
@@ -149,22 +179,22 @@ void get_all_xbee_message(/*int timeout_ms*/) {
   char incoming_byte = '\0';
   char last_byte = '\0';
   bool inmsg = false, new_rec = false;
-  //while (millis() - start < (unsigned long)timeout_ms) {
-    while (Serial.available() > 0 && index < sizeof(msg)-1) {
-      incoming_byte = Serial.read();
-      if (incoming_byte == '\n' || incoming_byte == ' ') continue;
-      if (inmsg) {
-        if (last_byte == '<' && incoming_byte != '0' && incoming_byte != '*') {inmsg = false; last_byte = incoming_byte; continue;}
-        msg[index++] = incoming_byte;
-        last_byte = incoming_byte;
-        if (incoming_byte == '>') {inmsg = false;}
-      } else {
-        if (incoming_byte == '<') {inmsg = new_rec = true; msg[index++] = '<'; last_byte = '<';}
-      }
+  while (Serial.available() > 0 && index < sizeof(msg)-1) {
+    incoming_byte = Serial.read();
+    if (incoming_byte == '\n' || incoming_byte == ' ' || (last_byte == '<' && incoming_byte == '<')) continue;
+    if (inmsg) {
+      if (last_byte == '<' && incoming_byte != '0' && incoming_byte != '*') {inmsg = false; last_byte = incoming_byte; continue;}
+      msg[index++] = incoming_byte;
+      last_byte = incoming_byte;
+      if (incoming_byte == '>') {inmsg = false;}
+    } else {
+      if (incoming_byte == '<') {inmsg = new_rec = true; msg[index++] = '<'; last_byte = '<';}
     }
-  //}
+  }
   msg[index] = '\0';
-  if (new_rec == true) save_state_msg();
+  //if (first_initial_done == true) serial_printf("  msg:%s\n", msg);
+  if (new_rec == true && first_initial_done == false) save_state_msg();
+  else if (new_rec == true) save_and_respond();
 }
 
 /*setDHDL(const char* dh, const char* dl) {
@@ -289,7 +319,7 @@ void loop() {
 
   //After network list exists, every 3 seconds check for any updates, and respond accordingly
   cur_ms = millis(); //always place 'last_ms = cur_ms' in last if statement
-  if (ms_passed(5000)) {
+  if (ms_passed(10000)) {
     get_A_node_state(2000);
 
     //if (self.new_msg) {
@@ -298,4 +328,5 @@ void loop() {
     //serial_printf("3 seconds passed\n");
     last_ms = cur_ms;
   }
+  get_all_xbee_message();
 }

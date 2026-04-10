@@ -2,8 +2,8 @@
 #include <SoftwareSerial.h>
 
 #define is_last_node_in_chain() (self.flag-'a'+1) == self.ncount
-#define last_node_in_chain() ('a' + (self.ncount-1))
-#define next_node_in_chain() (self.flag+1)
+#define last_node_in_chain() (char)('a' + (self.ncount-1))
+#define next_node_in_chain() (char)(self.flag+1)
 
 #define read_serial(dst) \
 count = 0; \
@@ -82,7 +82,7 @@ void handle_command(const char* command_str) {
     char propogation_buffer[64] = {0};
     char* carried_data = command_str+1+9;
     int lightlevel = getLightLevel();
-    char node_up_chain = self.flag == 'a' ? '0' : self.flag-1;
+    char node_up_chain = self.flag == 'a' ? '0' : (char)(self.flag-1);
 
     snprintf(propogation_buffer, sizeof(propogation_buffer), "<%cpropogate%c%d;%s>\n",
       node_up_chain, self.flag, lightlevel, carried_data);
@@ -96,17 +96,18 @@ void handle_command(const char* command_str) {
   //  but I'm not that kinda beast man.
   else if (strncmp(command_str+1, "turn", 4) == 0) { //send back up to previous node, then base if cluster head
     //Serial.print("  in turn\n");
-    const bool turnlighton = strncmp(command_str+1+4+1, "on", 2) == 0; //'on' or 'off'
+    const bool turnlighton = (strncmp(command_str+1+4+1, "on", 2) == 0); //'on' or 'off'
     if (turnlighton) {
-      if (led_state) return;
+      serial_printf("  turn on\n");
+      if (led_state) goto sendmsg;
       digitalWrite(ledPin, HIGH);
       led_state = true;
     } else { //turn off LED
-      if (!led_state) return;
+      if (!led_state) goto sendmsg;
       digitalWrite(ledPin, LOW);
       led_state = false;
     }
-
+sendmsg:
     //if last node, don't need to do this, otherwise, send down again
     if (is_last_node_in_chain()) return;
     char* restofmsg = strchr(command_str+1+4, next_node_in_chain());
