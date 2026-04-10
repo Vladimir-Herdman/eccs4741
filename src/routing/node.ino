@@ -67,8 +67,10 @@ void turn_on_led() {
 }
 
 void handle_command(const char* command_str) {
-  if (!(command_str[0] == '*' || command_str[0] == self.flag)) return;
-  if (strncmp(command_str+1, "state", 5) == 0) { 
+  //serial_printf(" command given:%s\n", command_str);
+  if (!(command_str[0] == '*' || command_str[0] == self.flag || command_str[0] == '.')) return;
+  if (strncmp(command_str+1, "state", 5) == 0) {
+    //Serial.print("  in state\n");
     //Determine if last node, if not, then send state down to last.
     //Once you receive the propogate, send it back in the chain.
     //  If you're cluster head ('a'), then send back to base station ('0' flag)
@@ -76,6 +78,7 @@ void handle_command(const char* command_str) {
     else serial_printf("<%cstate>\n", next_node_in_chain());
   }
   else if (strncmp(command_str+1, "propogate", 9) == 0) { //send back up to previous node, then base if cluster head
+    //Serial.print("  in propogate\n");
     char propogation_buffer[64] = {0};
     char* carried_data = command_str+1+9;
     int lightlevel = getLightLevel();
@@ -92,6 +95,7 @@ void handle_command(const char* command_str) {
   //  A better way would include just using info changes for individual nodes,
   //  but I'm not that kinda beast man.
   else if (strncmp(command_str+1, "turn", 4) == 0) { //send back up to previous node, then base if cluster head
+    //Serial.print("  in turn\n");
     const bool turnlighton = strncmp(command_str+1+4+1, "on", 2) == 0; //'on' or 'off'
     if (turnlighton) {
       if (led_state) return;
@@ -111,7 +115,7 @@ void handle_command(const char* command_str) {
   //set self.flag and self.ncount (nodes in network count) based off base
   //setting msg (the FOLLOWING 'else if')
   else if (strncmp(command_str+1, "set", 3) == 0) {
-    Serial.print("  in set"); //COMMENT
+    //Serial.print("  in set"); //COMMENT
     char fullsid[16] = {0};
     strlcat(fullsid, self.sh, sizeof(fullsid));
     strlcat(fullsid, self.sl, sizeof(fullsid));
@@ -125,13 +129,12 @@ void handle_command(const char* command_str) {
     char* semicol = strchr(command_str, ';');
     int simicol_count = 0;
     while (semicol != NULL) {
-      Serial.println("  here");
       ++simicol_count;
       semicol = strchr(semicol+1, ';');
     }
     self.ncount = simicol_count; //Use ncount to determine if we need to propogate a msg or send back to base
 
-    serial_printf("I'm set to %c\n, and there's %d seonsornode in network", self.flag, self.ncount); //COMMENT
+    //serial_printf("I'm set to %c, and there's %d seonsornode in network", self.flag, self.ncount); //COMMENT
   }
   else if (strncmp(command_str+1, "istate", 6) == 0) {
     serial_printf("<0%s%s>\n", self.sh, self.sl);

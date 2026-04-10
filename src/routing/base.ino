@@ -148,6 +148,12 @@ void save_initial_responding_nodes() {
 
 void save_state_msg() {
   char* bracket_start = msg;
+  /*Serial.print("  in save state, here's msg cur:");
+  for (int i=0; i<strlen(msg); i++) {
+    if (msg[i] == '\n' || msg[i] == '<' || msg[i] == '>' || msg[i] == '\0') {
+      Serial.print("^");
+    } else Serial.print(msg[i]);
+  }*/
   while ((bracket_start = strchr(bracket_start, '<')) != NULL) {
     char* bracket_end = strchr(bracket_start, '>');
     if (!bracket_end) break;
@@ -158,6 +164,7 @@ void save_state_msg() {
     };
 
     *bracket_end = '\0';
+    //serial_printf("  in save_state, bracket_start:%s\n", bracket_start);
     if (bracket_start[1] == '0') { //for base station
       self.new_msg = true;
       strlcpy(self.last_received_msg, bracket_start+2, sizeof(self.last_received_msg));
@@ -192,7 +199,7 @@ void get_all_xbee_message() {
   char incoming_byte = '\0';
   while (Serial.available() > 0) {
     incoming_byte = Serial.read();
-    if (incoming_byte == '\n') continue;
+    if (incoming_byte == '\n' || incoming_byte == ' ') continue;
     msg[index] = incoming_byte;
     ++index;
     if (index == sizeof(msg)-1) break;
@@ -256,6 +263,7 @@ void get_A_node_state(const int delay_ms) {
   delay(delay_ms);
   get_all_xbee_message();
   //save_responding_nodes();
+  //Serial.print("  about to call save state\n");
   save_state_msg();
 }
 
@@ -267,53 +275,21 @@ void get_all_nodes_state(const int delay_ms) {
 }
 
 void respond_to_nodes() {
+  //serial_printf("  in response, last msg:%s\n", self.last_received_msg);
   char tosend[64] = {0};
-  char* curmsg = self.last_received_msg; //past '<%c', so just data and no '>' at end: 'a123;b321;c441;'
-  int lightlevel = atof(curmsg+1);
-  snprintf(tosend, sizeof(tosend), "<aturna%s;", (lightlevel > 600 ? "off" : "on"));
-  for (int i=1; i<self.ncount; i++) {
-    char nodeflag = 'a'+i;
-    curmsg = strchr(curmsg, nodeflag);
-    lightlevel = atof(curmsg+1);
+  char* curmsg = self.last_received_msg+9; //past '<%c', so just data and no '>' at end: 'a123;b321;c441;'
+  int lightlevel;
+  strlcpy(tosend, "<aturn", sizeof(tosend));
+  for (int i=0; i<self.ncount; i++) {
+    char nodeflag[2] = {0}; nodeflag[0] = 'a'+i;
+    curmsg = strchr(curmsg, nodeflag[0]);
+    lightlevel = atoi(curmsg+1);
     strlcat(tosend, nodeflag, sizeof(tosend));
-    strlcat(tosend, (lightlevel > 600 ? "off" : "on"), sizeof(tosend));
+    strlcat(tosend, (lightlevel > 490 ? "off" : "on"), sizeof(tosend));
     strlcat(tosend, ";", sizeof(tosend));
   }
   strlcat(tosend, ">", sizeof(tosend));
   Serial.println(tosend); //<aturnaon;boff;con;>
-}
-
-void respond_to_node(XbeeNode* xbeenode) {
-  //serial_printf("node flag(%c) and val(%d)\n", xbeenode->flag, (int)xbeenode->val);
-  switch (xbeenode->flag) {
-    case 'T': {
-      const int temp = (int)xbeenode->val;
-      if (temp >= 70) {
-        Serial.print("<Tturn on fan>\n");
-      }
-      else if (temp < 70) {
-        Serial.print("<Tturn off fan>\n");
-      }
-      break;
-    }
-
-    case 'L': {
-      const int lightlevel = (int)xbeenode->val;
-      if (lightlevel >= 600) {
-        Serial.print("<Lturn off led>\n");
-      }
-      else if (lightlevel < 600) {
-        Serial.print("<Lturn on led>\n");
-      }
-      break;
-    }
-
-    default: {
-      serial_printf("Unknown flag: %c (%d)\n", xbeenode->flag, (int)xbeenode->flag);
-      break;
-    }
-  }
-  xbeenode->recieved_new_msg = false;
 }
 
 /*void sendToNode(const char*  dh, const char* dl, const char* message) {
@@ -358,8 +334,8 @@ void loop() {
 
   //After network list exists, every 3 seconds check for any updates, and respond accordingly
   cur_ms = millis(); //always place 'last_ms = cur_ms' in last if statement
-  if (ms_passed(5000)) {
-    get_A_node_state(5000);
+  if (ms_passed(10000)) {
+    get_A_node_state(6000);
 
     if (self.new_msg) {
       respond_to_nodes();
