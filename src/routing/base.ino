@@ -22,7 +22,7 @@ struct {
   char sh[16];
   char sl[16];
   char dflag;
-  char last_received_msg[64];
+  char last_received_msg[128];
   bool new_msg = false;
   int ncount = 0;
 } self;
@@ -46,17 +46,6 @@ void serial_printf(const char* fmt, ...) {
   Serial.print(to_send);
 }
 
-void update_initial_node(const char* node_str) {
-  for (size_t i=0; i<available_nodes_idx; i++) {
-    XbeeNode* node = &available_nodes[i];
-    if (!(node->flag == node_str[0])) continue;
-
-    char* fcol = strchr(node_str, ':');
-    node->val = atof(fcol+1);
-    node->recieved_new_msg = true;
-  }
-}
-
 void update_node(const char* node_str) {
   for (size_t i=0; i<available_nodes_idx; i++) {
     XbeeNode* xbn = &available_nodes[i];
@@ -75,33 +64,17 @@ bool append_initial_node(const char* node_str) {
   if (available_nodes_idx == 8) return false;
   for (size_t i=0; i<available_nodes_idx; i++) { //if already in list, return and do nothing
     const XbeeNode* xbn = &available_nodes[i];
-    if (strncmp(xbn->sh, node_str+1, 6) == 0 && strncmp(xbn->sl, node_str+1+6, 8) == 0) return false;
+    if (strncmp(xbn->sh, node_str, 6) == 0 && strncmp(xbn->sl, node_str+6, 8) == 0) return false;
   }
   XbeeNode node;
   static char iflag = 'a';
   node.flag = iflag++;
   node.recieved_new_msg = true;
   //serial_printf("  node_str:%s\n", node_str);
-  strncpy(node.sh, node_str+1, 6);
-  strcpy(node.sl, node_str+1+6);
+  strncpy(node.sh, node_str, 6);
+  strcpy(node.sl, node_str+6);
   //serial_printf("  node_str sl:%s\n", node_str+1+6);
   //serial_printf("  %s\n", node.sl);
-  available_nodes[available_nodes_idx] = node;
-  ++available_nodes_idx;
-  return true;
-}
-
-bool append_node(const char* node_str) {
-  if (node_str[0] == '*') return false;
-  if (available_nodes_idx == 8) return false;
-  for (size_t i=0; i<available_nodes_idx; i++) {
-    if (available_nodes[i].flag == node_str[0]) return false;
-  }
-  char* fcol = strchr(node_str, ':');
-  XbeeNode node;
-  node.flag = node_str[0];
-  node.val = atof(fcol+1);
-  node.recieved_new_msg = true;
   available_nodes[available_nodes_idx] = node;
   ++available_nodes_idx;
   return true;
@@ -123,27 +96,24 @@ bool node_list_contains_flag(const char flag) {
 }
 
 void save_initial_responding_nodes() {
-  char* bracket_start = msg;
-  while ((bracket_start = strchr(bracket_start, '<')) != NULL) {
-    char* bracket_end = strchr(bracket_start, '>');
-    if (!bracket_end) break;
-    if (bracket_end == bracket_start+1) {
-      *bracket_end = '\0';
-      bracket_start = bracket_end + 1;
-      continue;
-    };
+  char* lastmsg = self.last_received_msg;
 
-    *bracket_end = '\0';
-    if (node_list_contains_str(bracket_start[2])) {
-      //I don't think we should be updating at all in initial node list generation, just appending
-      //update_node(&bracket_start[1]);
-      ;;;
-    } else {
-      append_initial_node(&bracket_start[1]);
-    }
-    bracket_start = bracket_end + 1;
+  if (node_list_contains_str(lastmsg)) {
+    //I don't think we should be updating at all in initial node list generation, just appending
+    //update_node(&bracket_start[1]);
+    ;;;
+  } else {
+    append_initial_node(lastmsg);
   }
   msg[0] = '\0';
+}
+
+void respond_to_from_node() {
+  if (strncmp(self.last_received_msg, "propogate", 9) == 0) respond_to_nodes();
+  else { //only other time msg, at start getting all nodes set up
+    save_initial_responding_nodes();
+    send_initial_node_flags();
+  }
 }
 
 void save_state_msg() {
@@ -168,43 +138,33 @@ void save_state_msg() {
     if (bracket_start[1] == '0') { //for base station
       self.new_msg = true;
       strlcpy(self.last_received_msg, bracket_start+2, sizeof(self.last_received_msg));
+      respond_to_from_node();
     }
   }
 }
 
-void save_responding_nodes() {
-  char* bracket_start = msg;
-  while ((bracket_start = strchr(bracket_start, '<')) != NULL) {
-    char* bracket_end = strchr(bracket_start, '>');
-    if (!bracket_end) break;
-    if (bracket_end == bracket_start+1) {
-      *bracket_end = '\0';
-      bracket_start = bracket_end + 1;
-      continue;
-    };
-
-    *bracket_end = '\0';
-    if (node_list_contains_flag(bracket_start[1])) {
-      update_node(&bracket_start[1]);
-    } /*else { //I just don't think it should append it if it wasn't in the inital state call flag list
-      append_node(&bracket_start[1]);
-    }*/
-    bracket_start = bracket_end + 1;
-  }
-  msg[0] = '\0';
-}
-
-void get_all_xbee_message() {
+void get_all_xbee_message(/*int timeout_ms*/) {
   size_t index = 0;
+  //unsigned long start = millis();
   char incoming_byte = '\0';
-  while (Serial.available() > 0) {
-    incoming_byte = Serial.read();
-    if (incoming_byte == '\n' || incoming_byte == ' ') continue;
-    msg[index] = incoming_byte;
-    ++index;
-    if (index == sizeof(msg)-1) break;
-  }
+  char last_byte = '\0';
+  bool inmsg = false, new_rec = false;
+  //while (millis() - start < (unsigned long)timeout_ms) {
+    while (Serial.available() > 0 && index < sizeof(msg)-1) {
+      incoming_byte = Serial.read();
+      if (incoming_byte == '\n' || incoming_byte == ' ') continue;
+      if (inmsg) {
+        if (last_byte == '<' && incoming_byte != '0' && incoming_byte != '*') {inmsg = false; last_byte = incoming_byte; continue;}
+        msg[index++] = incoming_byte;
+        last_byte = incoming_byte;
+        if (incoming_byte == '>') {inmsg = false;}
+      } else {
+        if (incoming_byte == '<') {inmsg = new_rec = true; msg[index++] = '<'; last_byte = '<';}
+      }
+    }
+  //}
   msg[index] = '\0';
+  if (new_rec == true) save_state_msg();
 }
 
 /*setDHDL(const char* dh, const char* dl) {
@@ -247,6 +207,7 @@ void send_initial_node_flags() {
   strlcat(imsg, ">", sizeof(imsg));
   self.ncount = available_nodes_idx;
   Serial.println(imsg);
+  delay(3000);
   //setDHDL()
 }
 
@@ -254,8 +215,8 @@ void get_all_initial_nodes_state(const int delay_ms) {
   Serial.print("<*istate>\n");
   delay(delay_ms);
   get_all_xbee_message();
-  save_initial_responding_nodes();
-  send_initial_node_flags();
+  //save_initial_responding_nodes();
+  //send_initial_node_flags();
 }
 
 void get_A_node_state(const int delay_ms) {
@@ -264,19 +225,13 @@ void get_A_node_state(const int delay_ms) {
   get_all_xbee_message();
   //save_responding_nodes();
   //Serial.print("  about to call save state\n");
-  save_state_msg();
-}
-
-void get_all_nodes_state(const int delay_ms) {
-  Serial.print("<*state>\n");
-  delay(delay_ms);
-  get_all_xbee_message();
-  save_responding_nodes();
+  //save_state_msg();
 }
 
 void respond_to_nodes() {
   //serial_printf("  in response, last msg:%s\n", self.last_received_msg);
   char tosend[64] = {0};
+  //serial_printf("  lmsg:%s\n", self.last_received_msg);
   char* curmsg = self.last_received_msg+9; //past '<%c', so just data and no '>' at end: 'a123;b321;c441;'
   int lightlevel;
   strlcpy(tosend, "<aturn", sizeof(tosend));
@@ -285,7 +240,7 @@ void respond_to_nodes() {
     curmsg = strchr(curmsg, nodeflag[0]);
     lightlevel = atoi(curmsg+1);
     strlcat(tosend, nodeflag, sizeof(tosend));
-    strlcat(tosend, (lightlevel > 490 ? "off" : "on"), sizeof(tosend));
+    strlcat(tosend, (lightlevel > 600 ? "off" : "on"), sizeof(tosend));
     strlcat(tosend, ";", sizeof(tosend));
   }
   strlcat(tosend, ">", sizeof(tosend));
@@ -328,18 +283,18 @@ void setup() {
 void loop() {
   /* Routing Code */
   if (available_nodes[0].flag == '\0') {
-    get_all_initial_nodes_state(3000);
+    get_all_initial_nodes_state(5000);
     return;
   }
 
   //After network list exists, every 3 seconds check for any updates, and respond accordingly
   cur_ms = millis(); //always place 'last_ms = cur_ms' in last if statement
-  if (ms_passed(10000)) {
-    get_A_node_state(6000);
+  if (ms_passed(5000)) {
+    get_A_node_state(2000);
 
-    if (self.new_msg) {
-      respond_to_nodes();
-    }
+    //if (self.new_msg) {
+      //respond_to_nodes();
+    //}
     //serial_printf("3 seconds passed\n");
     last_ms = cur_ms;
   }

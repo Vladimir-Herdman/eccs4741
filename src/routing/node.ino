@@ -84,7 +84,7 @@ void handle_command(const char* command_str) {
     int lightlevel = getLightLevel();
     char node_up_chain = self.flag == 'a' ? '0' : self.flag-1;
 
-    snprintf(propogation_buffer, sizeof(propogation_buffer), "<%cpropogate%c%d;%s>",
+    snprintf(propogation_buffer, sizeof(propogation_buffer), "<%cpropogate%c%d;%s>\n",
       node_up_chain, self.flag, lightlevel, carried_data);
 
     // str:<0c123;a123;b1234;>
