@@ -1,8 +1,12 @@
 #include <TinyGPS++.h>
 #include <SoftwareSerial.h>
 
+//two minutes currently
+#define SECONDS_TOTAL 120
+
 #define passed_ms(ms) curms - lastms >= (ms)
 #define passed_s(s) curms - lastms >= ((s)*1000)
+#define sp Serial.print
 
 const int RXPin = 0, TXPin = 1;
 const uint32_t GPSBaud = 9600;
@@ -13,11 +17,13 @@ SoftwareSerial ss(RXPin, TXPin);
 struct Location {
   double lat;
   double lng;
-}
+};
 
 const Location mac = {40.766888, -83.827956};
 const Location jlk = {40.767861, -83.827911};
 Location cur_loc;
+const int total_ms = SECONDS_TOTAL*1000;
+int start_ms = 0;
 
 unsigned long curms, lastms;
 unsigned long readcount;
@@ -91,9 +97,15 @@ void displayInfo() {
 }
 
 void getInfo() {
+  static bool start_set = false;
   if (gps.location.isValid() && gps.location.lat() != 0) {
       cur_loc.lat = gps.location.lat();
       cur_loc.lng = gps.location.lng();
+
+      if (!start_set){
+        start_ms = millis();
+        start_set = true;
+      }
   }
 }
 
@@ -112,13 +124,26 @@ void loop() {
     ++readcount;
     getInfo();
     //displayInfo();
-    Serial.print("currently read "); Serial.print((unsigned int)readcount); Serial.print(" times\n");
+    //Serial.print("currently read "); Serial.print((unsigned int)readcount); Serial.print(" times\n");
   }
 
-  if (passed_s(10)) {
+  if (passed_s(1) && cur_loc.lat != 0) {
     const double distance_m = haversign(cur_loc, mac);
+    const int time_left_ms = total_ms - (curms - start_ms);
     readcount = 0;
+
+    sp("Current Distance to Mac: "); sp(distance_m); sp("m\n");
+    sp("\tTime left: "); sp(time_left_ms); sp("ms -> "); sp(time_left_ms/1000.0); sp("s\n");
+    sp("\tSpeed to be in time: "); sp(distance_m/(time_left_ms/1000.0)); sp("mps\n\n");
+
     lastms = curms;
+  }
+
+  if ((total_ms - ((int)curms - start_ms)) < 0) {
+    sp("Time limit passed to reach Mac\n");
+    sp("\tCurrent distance from Mac: "); sp(haversign(cur_loc, mac)); sp("\n");
+    while (true) //wait forever
+      ;;
   }
 
   if (curms > 5000 && gps.charsProcessed() < 10) {
