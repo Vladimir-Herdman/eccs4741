@@ -47,30 +47,36 @@ struct NamedLocation {
 
 NamedLocation hardcoded_locations[] = {
   //main locations
-  {"Chapel", {40.767339, -83.828133}, 0},
-  {"Chapel", {40.767159, -83.828060}, 0},
-  {"Chapel", {40.767258, -83.828499}, 0},
-  {"Library", {40.767051, -83.827962}, 0},
-  {"Library", {40.767397, -83.827964}, 0},
-  {"Fire Hydrant", {40.767674, -83.827773}, 0},
-  {"JLK", {40.767683, -83.827765}, 0},
-  {"JLK", {40.767722, -83.827924}, 0},
-  {"JLK", {40.767475, -83.828182}, 0},
+  {"Chapel", {40.767381, -83.828538}, 0},
+  {"Chapel", {40.767092, -83.828278}, 0},
+  {"Chapel", {40.767154, -83.828197}, 0},
+  {"Library", {40.767091, -83.827656}, 0},
+  {"Library", {40.767244, -83.827704}, 0},
+  {"Library", {40.767460, -83.827640}, 0},
+  {"Library", {40.767560, -83.827390}, 0},
+  {"Fire Hydrant", {40.767771, -83.827527}, 0},
+  {"JLK", {40.767781, -83.827639}, 0},
+  {"JLK", {40.767783, -83.827941}, 0},
+  {"JLK", {40.767773, -83.828313}, 0},
 
   //midpoints
-  {"JLK|Chapel", {40.767461, -83.828659}, 0},
-  {"JLK|Library", {40.767530, -83.827863}, 0},
-  {"Center", {40.767269, -83.828158}, 0},
+  {"JLK|Chapel", {40.767707, -83.828546}, 0},
+  {"JLK|Chapel", {40.767640, -83.828326}, 0},
+  {"JLK|Library", {40.767630, -83.827629}, 0},
+  {"Chapel|Library", {40.767245, -83.827896}, 0},
+  {"Chapel|Library", {40.767337, -83.827926}, 0},
+  {"Center (between all 3)", {40.767571, -83.827937}, 0},
 
   //locations of interest
-  {"Flame of Unity (Center statue)", {40.767313, -83.828159}, 0},
-  {"Picnic Table", {40.767425, -83.828208}, 0},
-  {"Bike Rack (put my bike here on test day)", {40.767222, -83.828047}, 0},
-  {"Bike Repair (near library)", {40.767107, -83.828040}, 0},
-  {"Potted Tree", {40.767339, -83.827923}, 0},
-  {"McPheron Office", {40.767627, -83.828064}, 0},
-  {"'69 Kucklick Bench", {40.767734, -83.828744}, 0},
-  {"Treenis (baby branch on KLJ to center path)", {40.767521, -83.827978}, 0},
+  {"Flame of Unity (Center statue)", {40.767250, -83.827937}, 0},
+  {"Picnic Table", {40.767595, -83.828049}, 0},
+  {"Bike Rack (put my bike here on test day)", {40.767285, -83.827807}, 0},
+  {"Bike Repair (near library)", {40.767116, -83.827678}, 0},
+  //{"Potted Tree", {40.767339, -83.827923}, 0},
+  {"McPheron Office", {40.767812, -83.828066}, 0},
+  {"'69 Kucklick Bench", {40.767774, -83.828571}, 0},
+  {"Treenis (baby branch on JLK to center path)", {40.767686, -83.827871}, 0},
+  {"Flower Garden", {40.767082, -83.827808}, 0},
 };
 const int hardcoded_size = sizeof(hardcoded_locations)/sizeof(hardcoded_locations[0]);
 int hardcoded_interest_index = 0;
@@ -122,7 +128,7 @@ void display_location(char* locstr) {
   }
   for (int i=hardcoded_interest_index; i<hardcoded_size; i++) {
     curlistloc = &hardcoded_locations[i];
-    if (curlistloc->distance_m > 5) continue;
+    if (curlistloc->distance_m > 10) continue;
 
     interestarea = curlistloc;
   }
@@ -135,11 +141,11 @@ void display_location(char* locstr) {
     return;
   }
   sp("\tMain Area (closest): "); sp(mainarea->name); sp(".\n");
-  sp("\tArea of Interest (within 5 m): "); 
+  sp("\tArea of Interest (within 10 m): "); 
   if (interestarea)
     sp(interestarea->name);
   else
-    sp("NONE WITHIN 5 METERS");
+    sp("NONE WITHIN 10 METERS");
   sp(".\n");
 }
 
@@ -180,12 +186,11 @@ void get_all_xbee_message() {
 void setup() {
   Serial.begin(9600);
   for (int i=0; i<hardcoded_size; i++)
-    if (hardcoded_locations[i].name == "Flame of Unity (Center statue)") {
+    if (strcmp(hardcoded_locations[i].name, "Flame of Unity (Center statue)") == 0) {
       hardcoded_interest_index = i;
       break;
     }
-    sp("hardcoded_size:"); sp(hardcoded_size); sp("\n");
-    sp("hardcoded_interest_size:"); sp(hardcoded_interest_index); sp("\n");
+    sp("\nhardcoded_size:"); sp(hardcoded_size); sp(", hardcoded_interest_size:"); sp(hardcoded_interest_index); sp("\n");
 }
 
 void loop() {

@@ -92,7 +92,7 @@ void loop() {
     //sp("Current Distance to Mac: "); sp(distance_m, 6); sp("m\n");
     //sp("\tTime left: "); sp(time_left_ms); sp("ms -> "); sp(time_left_ms/1000.0, 2); sp("s\n");
     //sp("\tSpeed to be in time: "); sp(distance_m/(time_left_ms/1000.0), 2); sp("mps\n\n");
-    sp("<*loc"); sp(cur_loc.lat, 10); sp(";"); sp(cur_loc.lng, 10); sp(">\n");
+    sp("<*loc"); sp(cur_loc.lat, 6); sp(";"); sp(cur_loc.lng, 6); sp(">\n");
 
     lastms = curms;
   }
