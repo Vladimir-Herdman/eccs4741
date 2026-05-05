@@ -2,7 +2,7 @@
 #include <SoftwareSerial.h>
 
 //two minutes currently
-#define SECONDS_TOTAL 120
+#define SECONDS_TOTAL 75
 
 #define passed_ms(ms) curms - lastms >= (ms)
 #define passed_s(s) curms - lastms >= ((s)*1000)
@@ -127,18 +127,17 @@ void loop() {
     //displayInfo();
     //Serial.print("currently read "); Serial.print((unsigned int)readcount); Serial.print(" times\n");
   }
-  const double distance_ms = haversign(jlk.lat, mac.lat, jlk.lng, mac.lng);
-  //const double distance_ms = haversign(jkl, mac);
-  sp(distance_ms, 6); sp("\n");
-
+  //const double distance_ms = haversign(jlk.lat, mac.lat, jlk.lng, mac.lng);
+  //const double distance_ms = haversign(jlk, mac);
+  //sp(distance_ms, 6); sp("\n");
 
   if (passed_s(1) && cur_loc.lat != 0) {
-    const double distance_m = haversign(cur_loc.lat, mac.lat, cur_loc.lng, mac.lng);
+    const double distance_m = haversign(cur_loc, mac);
     const unsigned long time_left_ms = total_ms - (curms - start_ms);
     readcount = 0;
 
     sp("Current Distance to Mac: "); sp(distance_m, 6); sp("m\n");
-    sp("\tTime left: "); sp(time_left_ms); sp("ms -> "); sp(time_left_ms/1000.0, 3); sp("s\n");
+    sp("\tTime left: "); sp(time_left_ms); sp("ms -> "); sp(time_left_ms/1000.0, 2); sp("s\n");
     sp("\tSpeed to be in time: "); sp(distance_m/(time_left_ms/1000.0), 2); sp("mps\n\n");
 
     lastms = curms;
@@ -153,6 +152,6 @@ void loop() {
 
   if (curms > 5000 && gps.charsProcessed() < 10) {
     Serial.println(F("No GPS detected: check wiring."));
-    delay(1);
+    displayInfo();
   }
 }
